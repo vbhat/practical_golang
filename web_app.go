@@ -5,19 +5,22 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 )
 
 type SiteMapIndex struct {
-	Locations []Location `xml:"sitemap"`
+	Locations []string `xml:"sitemap>loc"`
 }
 
-type Location struct {
-	Loc string `xml:"loc"`
+type News struct {
+	Titles    []string `xml:"url>news>title"`
+	Keywords  []string `xml:"url>news>keywords"`
+	Locations []string `xml:"url>loc"`
 }
 
-func (l Location) String() string {
-	return fmt.Sprintf(l.Loc)
-}
+// func (l Location) String() string {
+// 	return fmt.Sprintf(l.Loc)
+// }
 
 func main() {
 	resp, _ := http.Get("https://www.washingtonpost.com/news-sitemaps/index.xml")
@@ -27,8 +30,17 @@ func main() {
 	var s SiteMapIndex
 	xml.Unmarshal(bytes, &s)
 
-	for _, loc := range s.Locations {
-		fmt.Println(loc)
+	var n News
+
+	for _, location := range s.Locations {
+		location = strings.TrimSpace(location) //Remove trailing whitespace at the end. Not having this causes errors
+		// fmt.Printf("%s\n", location)
+		resp, _ := http.Get(location)
+		bytes, _ := ioutil.ReadAll(resp.Body)
+		xml.Unmarshal(bytes, &n)
+
+		fmt.Println(n)
+
 	}
 
 }
