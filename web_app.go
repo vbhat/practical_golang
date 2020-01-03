@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -27,11 +28,20 @@ type StoryParams struct {
 	Location string
 }
 
+type NewsAggPage struct {
+	Title string
+	News  map[string]StoryParams
+}
+
 // func (l Location) String() string {
 // 	return fmt.Sprintf(l.Loc)
 // }
 
-func main() {
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(w, "<h1> Woah! Go is neat! </h1>")
+}
+
+func newsAggHandler(w http.ResponseWriter, r *http.Request) {
 	resp, _ := http.Get("https://www.washingtonpost.com/news-sitemaps/index.xml")
 	bytes, _ := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
@@ -53,10 +63,13 @@ func main() {
 			newsMap[story.Title] = StoryParams{story.Keywords, story.Location}
 		}
 	}
+	p := NewsAggPage{Title: "Some amazing news!", News: newsMap}
+	t, _ := template.ParseFiles("basictemplating.html")
+	t.Execute(w, p)
+}
 
-	for title, data := range newsMap {
-		fmt.Printf(title, "\n\n")
-		fmt.Printf(data.Location, "\n")
-		fmt.Printf(data.Keywords, "\n\n ------------------- \n\n")
-	}
+func main() {
+	http.HandleFunc("/", indexHandler)
+	http.HandleFunc("/agg", newsAggHandler)
+	http.ListenAndServe(":8080", nil)
 }
