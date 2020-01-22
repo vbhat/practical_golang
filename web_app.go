@@ -7,7 +7,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"sync"
 )
+
+var wg sync.WaitGroup
 
 type SiteMapIndex struct {
 	Locations []string `xml:"sitemap>loc"`
@@ -37,6 +40,18 @@ type NewsAggPage struct {
 // 	return fmt.Sprintf(l.Loc)
 // }
 
+func newsRoutine(c chan News, location string) {
+	defer wg.Done()
+	var n News
+	location = strings.TrimSpace(location) //Remove trailing whitespace at the end. Not having this causes errors
+	resp, _ := http.Get(location)
+	bytes, _ := ioutil.ReadAll(resp.Body)
+	xml.Unmarshal(bytes, &n)
+	resp.Body.Close()
+
+	c <- n
+}
+
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "<h1> Woah! Go is neat! </h1>")
 }
@@ -49,17 +64,19 @@ func newsAggHandler(w http.ResponseWriter, r *http.Request) {
 	var s SiteMapIndex
 	xml.Unmarshal(bytes, &s)
 
-	var n News
-
 	newsMap := make(map[string]StoryParams)
 
-	for _, location := range s.Locations {
-		location = strings.TrimSpace(location) //Remove trailing whitespace at the end. Not having this causes errors
-		resp, _ := http.Get(location)
-		bytes, _ := ioutil.ReadAll(resp.Body)
-		xml.Unmarshal(bytes, &n)
+	queue := make(chan News, 100)
 
-		for _, story := range n.Stories {
+	for _, location := range s.Locations {
+		wg.Add(1)
+		go newsRoutine(queue, location)
+	}
+
+	wg.Wait()
+	close(queue)
+	for elem := range queue {
+		for _, story := range elem.Stories {
 			newsMap[story.Title] = StoryParams{story.Keywords, story.Location}
 		}
 	}
@@ -71,5 +88,5 @@ func newsAggHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/agg", newsAggHandler)
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":8000", nil)
 }
